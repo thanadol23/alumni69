@@ -80,8 +80,10 @@ const API = "https://script.google.com/macros/s/AKfycbxJ8w321BikF7z3dqy93sXXQsWb
 let KEY = new URLSearchParams(location.search).get("admin") || ""; // ผู้ดูแลเปิดหน้านี้ด้วย ?admin=รหัส
 const BANK = ""; // ใส่ข้อมูลบัญชีรับโอน เช่น "ธนาคาร ... เลขที่บัญชี ... ชื่อบัญชี ..."
 const R = (a, b) => Array.from({length: b - a + 1}, (_, i) => a + i);
-const Z = [[R(1, 56), R(113, 136)], [R(57, 112), R(137, 150)]]; // 2 โซน: 8 บรรทัด x 10 แถว (เดิม 7 แถว + เพิ่มอีก 3 แถว)
-const ZN = ["โต๊ะ 1-56 และ 113-136", "โต๊ะ 57-112 และ 137-150"];
+const TOTAL = 165; // จำนวนโต๊ะทั้งหมด
+// 2 โซน: โซน 2 ต่อแถวที่ 9 -> 161,162 ต่อจาก 111,112 (null = ช่องว่าง) และ 163-165 ต่อจาก 158-160 (จำนวนแถวคำนวณอัตโนมัติ)
+const Z = [[R(1, 56), R(113, 136)], [R(57, 112).concat([null, null, null, null, null, 161, 162]), R(137, 160).concat(R(163, 165))]];
+const ZN = ["โต๊ะ 1-56 และ 113-136", "โต๊ะ 57-112 และ 137-165"];
 const VIP = [3, 4, 5];
 const ST = {free: "เหลือว่าง", pending: "รอตรวจสอบ", booked: "จองแล้ว"};
 const $ = s => document.querySelector(s);
@@ -97,7 +99,7 @@ function render() {
   let n = {pending: 0, booked: 0};
   Object.values(D).forEach(d => { if (d && n[d.status] != null) n[d.status]++; });
   $("#leg").innerHTML =
-    `<div class="f"><b>${ST.free}</b><span>${150 - n.pending - n.booked}</span></div>` +
+    `<div class="f"><b>${ST.free}</b><span>${TOTAL - n.pending - n.booked}</span></div>` +
     `<div class="p"><b>${ST.pending}</b><span>${n.pending}</span></div>` +
     `<div class="k"><b>${ST.booked}</b><span>${n.booked}</span></div>`;
   const cell = id => {
@@ -107,11 +109,12 @@ function render() {
   }, ai = `<div class="ai"></div>`;
   $("#zones").innerHTML = Z.map(([base, ext], i) => {
     let h = "";
-    for (let r = 0; r < 8; r++) {
+    const rows = Math.max(Math.ceil(base.length / 7), Math.ceil(ext.length / 3));
+    for (let r = 0; r < rows; r++) {
       const b = base.slice(r * 7, r * 7 + 7), x = ext.slice(r * 3, r * 3 + 3);
       h += cell(b[0]) + cell(b[1]) + ai + cell(b[2]) + cell(b[3]) + cell(b[4]) + ai + cell(b[5]) + cell(b[6]) + ai + cell(x[0]) + cell(x[1]) + cell(x[2]);
     }
-    return (i === 1 ? `<div class="mc"><div class="ai"></div><div class="con">🎵 Music Console</div><div class="ai"></div></div><div class="kn">🔍 โซนทำอาหารอยู่ด้านซ้ายมือ</div>` : "") + `<div class="grid">${h}</div>`;
+    return (i === 0 ? `<div class="mc"><div class="ai"></div><div class="con">🎵 Music Console</div><div class="ai"></div></div>` : "") + (i === 1 ? `<div class="kn">🔍 โซนทำอาหารอยู่ด้านซ้ายมือ</div>` : "") + `<div class="grid">${h}</div>`;
   }).join("");
   $("#warn").hidden = shared;
 }
