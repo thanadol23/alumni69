@@ -39,6 +39,8 @@ h1{margin:0;text-align:center;color:var(--g);font-size:26px}
 @media(max-width:560px){.grid{grid-template-columns:repeat(2,1fr) 8px repeat(3,1fr) 8px repeat(2,1fr) 8px repeat(3,1fr);gap:8px 3px}.nm{font-size:8px}.t{font-size:10px}}
 .t{width:100%;aspect-ratio:1;border:0;border-radius:50%;color:#fff;font:600 clamp(11px,3.3vw,16px) "Prompt",sans-serif;cursor:pointer;max-width:56px}
 .t:active{transform:scale(.94)}
+.zb::after{content:"";position:absolute;left:-3px;right:-3px;bottom:-6px;height:3px;background:color-mix(in srgb,var(--mu) 40%,var(--bg))}
+
 .nm{font-size:10px;color:var(--mu);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:14px}
 .ov{position:fixed;inset:0;background:rgba(15,23,20,.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:14px;z-index:20}
 .ov[hidden]{display:none}
@@ -76,14 +78,25 @@ input{width:100%;border:1px solid var(--br);background:var(--in);color:var(--tx)
 <div class="toast" id="toast" hidden></div>
 
 <script>
-const API = "https://script.google.com/macros/s/AKfycbx6K0qzFTDI5KkyTkZ7BUTHJWL4v4F8JUnhogyb9-ErXPgsMvvdqbniqMPWXCFgaw2U/exec"; // วาง URL ของ Apps Script Web app (ลงท้าย /exec) ที่นี่
+const API = "https://script.google.com/macros/s/AKfycbxJ8w321BikF7z3dqy93sXXQsWbDx7QcVvD-c1SXjFP573wZUbfhE7LgxJYEdc1Tq0y/exec"; // วาง URL ของ Apps Script Web app (ลงท้าย /exec) ที่นี่
 let KEY = new URLSearchParams(location.search).get("admin") || ""; // ผู้ดูแลเปิดหน้านี้ด้วย ?admin=รหัส
 const BANK = ""; // ใส่ข้อมูลบัญชีรับโอน เช่น "ธนาคาร ... เลขที่บัญชี ... ชื่อบัญชี ..."
 const R = (a, b) => Array.from({length: b - a + 1}, (_, i) => a + i);
 const TOTAL = 165; // จำนวนโต๊ะทั้งหมด
-// 2 โซน: โซน 2 ต่อแถวที่ 9 -> 161,162 ต่อจาก 111,112 (null = ช่องว่าง) และ 163-165 ต่อจาก 158-160 (จำนวนแถวคำนวณอัตโนมัติ)
-const Z = [[R(1, 56), R(113, 136)], [R(57, 112).concat([null, null, null, null, null, 161, 162]), R(137, 160).concat(R(163, 165))]];
-const ZN = ["โต๊ะ 1-56 และ 113-136", "โต๊ะ 57-112 และ 137-165"];
+// ผังตามแบบวาด (17 แถว): ซ้าย = โซน 1-2 (โต๊ะ 1-112 ฝั่งละ 7 คอลัมน์ เรียงทีละแถว)
+// ขวา = โซน 3 (113-133) + 134-154 (3 คอลัมน์ เรียงลงตามคอลัมน์) + โซน 4 แถม (155-160) / แถวล่างสุด 161-165 (null = ช่องว่าง)
+const LAYOUT = Array.from({length: 17}, (_, r) => {
+  const left = r < 16 ? R(r * 7 + 1, r * 7 + 7) : [null, null, null, null, null, 161, 162];
+  let right;
+  if (r < 7) right = [113 + r, 120 + r, 127 + r];
+  else if (r < 14) right = [134 + r - 7, 141 + r - 7, 148 + r - 7];
+  else if (r === 14) right = [155, 156, 157];
+  else if (r === 15) right = [158, 159, 160];
+  else right = [163, 164, 165];
+  return left.concat(right);
+});
+const LB = [7, 15];      // เส้นกั้นฝั่งซ้าย: ใต้แถว 8 (โซน 1/2) และแถว 16 (โซน 2 / แถวล่างสุด)
+const RB = [7, 15];      // เส้นกั้นฝั่งขวา: ใต้แถว 8 (134-148) และแถว 16 (158-160)
 const VIP = [3, 4, 5];
 const ST = {free: "เหลือว่าง", pending: "รอตรวจสอบ", booked: "จองแล้ว"};
 const $ = s => document.querySelector(s);
@@ -102,20 +115,16 @@ function render() {
     `<div class="f"><b>${ST.free}</b><span>${TOTAL - n.pending - n.booked}</span></div>` +
     `<div class="p"><b>${ST.pending}</b><span>${n.pending}</span></div>` +
     `<div class="k"><b>${ST.booked}</b><span>${n.booked}</span></div>`;
-  const cell = id => {
+  const cell = (id, zb, side) => {
     if (!id) return `<div></div>`;
     const d = D["T" + id], s = d && ST[d.status] ? d.status : "free";
-    return `<div class="c">${VIP.includes(id) ? '<i class="vip">VIP</i>' : ""}<button class="t ${s}" data-id="${id}" aria-label="โต๊ะ ${id} ${ST[s]}">${id}</button><span class="nm">${esc(d ? d.name : "")}</span></div>`;
+    return `<div class="c${zb ? " zb" + (side ? " " + side : "") : ""}">${VIP.includes(id) ? '<i class="vip">VIP</i>' : ""}<button class="t ${s}" data-id="${id}" aria-label="โต๊ะ ${id} ${ST[s]}">${id}</button><span class="nm">${esc(d ? d.name : "")}</span></div>`;
   }, ai = `<div class="ai"></div>`;
-  $("#zones").innerHTML = Z.map(([base, ext], i) => {
-    let h = "";
-    const rows = Math.max(Math.ceil(base.length / 7), Math.ceil(ext.length / 3));
-    for (let r = 0; r < rows; r++) {
-      const b = base.slice(r * 7, r * 7 + 7), x = ext.slice(r * 3, r * 3 + 3);
-      h += cell(b[0]) + cell(b[1]) + ai + cell(b[2]) + cell(b[3]) + cell(b[4]) + ai + cell(b[5]) + cell(b[6]) + ai + cell(x[0]) + cell(x[1]) + cell(x[2]);
-    }
-    return (i === 0 ? `<div class="mc"><div class="ai"></div><div class="con">🎵 Music Console</div><div class="ai"></div></div>` : "") + (i === 1 ? `<div class="kn">🔍 โซนทำอาหารอยู่ด้านซ้ายมือ</div>` : "") + `<div class="grid">${h}</div>`;
+  const h = LAYOUT.map((row, r) => {
+    const c = row.map((id, i) => cell(id, (i < 7 ? LB : RB).includes(r)));
+    return c.slice(0, 2).join("") + ai + c.slice(2, 5).join("") + ai + c.slice(5, 7).join("") + ai + c.slice(7).join("");
   }).join("");
+  $("#zones").innerHTML = `<div class="mc"><div class="ai"></div><div class="con">🎵 Music Console</div><div class="ai"></div></div><div class="grid">${h}</div>`;
   $("#warn").hidden = shared;
 }
 
